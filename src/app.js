@@ -12,42 +12,44 @@ app.get('/', (req, res) => {
 app.get('/search', (req, res) => {
     const { name, limit, page } = req.query;
 
-    // 1. Check if name parameter is missing or empty
+    // 1. Check if 'name' parameter is missing or empty string
     if (name === undefined || name.trim() === '') {
         return res.status(400).json({ error: "Search name parameter is required." });
     }
 
-    // 2. Safely resolve allArticles dataset (handles local db.json or global Newton School variable)
-    let articlesData = [];
-    if (typeof allArticles !== 'undefined') {
-        articlesData = allArticles;
+    // 2. Safely resolve articles dataset
+    let dataset = [];
+    if (typeof allArticles !== 'undefined' && Array.isArray(allArticles)) {
+        dataset = allArticles;
+    } else if (global.allArticles && Array.isArray(global.allArticles)) {
+        dataset = global.allArticles;
     } else {
         try {
-            articlesData = require('../db.json');
+            dataset = require('../db.json');
         } catch (e) {
-            articlesData = [];
+            dataset = [];
         }
     }
 
-    // 3. Parse query parameters with default values
-    const parsedLimit = limit !== undefined ? parseInt(limit, 10) : 5;
-    const parsedPage = page !== undefined ? parseInt(page, 10) : 1;
+    // 3. Parse query parameters with fallback defaults
+    const parsedLimit = (limit !== undefined && !isNaN(parseInt(limit, 10))) ? parseInt(limit, 10) : 5;
+    const parsedPage = (page !== undefined && !isNaN(parseInt(page, 10))) ? parseInt(parseInt(page, 10)) : 1;
 
-    // 4. Case-insensitive search by title
+    // 4. Case-insensitive search by article title
     const searchTerm = name.toLowerCase();
-    const matchedArticles = articlesData.filter(article =>
-        article && article.title && article.title.toLowerCase().includes(searchTerm)
+    const matchedArticles = dataset.filter(article =>
+        article && article.title && String(article.title).toLowerCase().includes(searchTerm)
     );
 
     // 5. Calculate total results and total pages
     const totalResults = matchedArticles.length;
     const totalPages = totalResults > 0 ? Math.ceil(totalResults / parsedLimit) : 0;
 
-    // 6. Calculate pagination slices
+    // 6. Slice results array for the requested page
     const startIndex = (parsedPage - 1) * parsedLimit;
     const paginatedArticles = matchedArticles.slice(startIndex, startIndex + parsedLimit);
 
-    // 7. Return required JSON structure
+    // 7. Return exact JSON format required by spec
     return res.status(200).json({
         currentPage: parsedPage,
         totalPages: totalPages,
